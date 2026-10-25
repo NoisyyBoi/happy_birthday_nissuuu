@@ -4,7 +4,15 @@ import { Heart, Sparkles, Gift, Music2, Camera, Moon, Star, ArrowDown, LockKeyho
 import "./styles.css";
 
 // ─── Midnight target: November 2 2026, 00:00:00 IST (UTC+5:30) ───────────────
-const TARGET_MS = Date.UTC(2026, 10, 1, 18, 30, 0); // Nov 1 2026 18:30 UTC = Nov 2 00:00 IST
+// To enable test mode locally: create a file called .env.local in the project
+// root containing:  VITE_TEST_COUNTDOWN=true
+// Then run `npm run dev`. The video will trigger after 5 seconds.
+// To disable: delete .env.local (or set VITE_TEST_COUNTDOWN=false).
+// .env.local is gitignored — it will never be committed or deployed.
+const _TEST_MODE = import.meta.env.VITE_TEST_COUNTDOWN === "true";
+const TARGET_MS = _TEST_MODE
+  ? Date.now() + 5_000 + 18_000   // test: 5s countdown then video plays
+  : Date.UTC(2026, 10, 1, 18, 30, 0); // production: Nov 2 2026 00:00 IST
 const VIDEO_LEAD_MS = 18_000; // start video this many ms before midnight
 
 function Root() {

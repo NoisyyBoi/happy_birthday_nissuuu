@@ -1,7 +1,186 @@
-import React, { useState } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { createRoot } from "react-dom/client";
 import { Heart, Sparkles, Gift, Music2, Camera, Moon, Star, ArrowDown, LockKeyhole, Cake, Play, X, Check, RotateCcw } from "lucide-react";
 import "./styles.css";
+
+// ─── Midnight target: November 2 2026, 00:00:00 IST (UTC+5:30) ───────────────
+const TARGET_MS = Date.UTC(2026, 10, 1, 18, 30, 0); // Nov 1 2026 18:30 UTC = Nov 2 00:00 IST
+const VIDEO_LEAD_MS = 18_000; // start video this many ms before midnight
+
+function Root() {
+  // phase: 'countdown' | 'video' | 'birthday'
+  const [phase, setPhase] = useState(() => {
+    const left = TARGET_MS - Date.now();
+    if (left <= 0) return "birthday";
+    if (left <= VIDEO_LEAD_MS) return "video";
+    return "countdown";
+  });
+
+  // live countdown display [hh, mm, ss]
+  const [timeLeft, setTimeLeft] = useState(() => {
+    const left = Math.max(0, TARGET_MS - Date.now());
+    return msToHMS(left);
+  });
+
+  const midnightReachedRef = useRef(false);
+  const videoRef = useRef(null);
+  const timerRef = useRef(null);
+
+  function msToHMS(ms) {
+    const totalSec = Math.max(0, Math.floor(ms / 1000));
+    const h = Math.floor(totalSec / 3600);
+    const m = Math.floor((totalSec % 3600) / 60);
+    const s = totalSec % 60;
+    return [h, m, s];
+  }
+
+  // Called when we want to go to birthday phase — never before midnight
+  const enterBirthday = useCallback(() => {
+    setPhase("birthday");
+  }, []);
+
+  // Main countdown tick
+  useEffect(() => {
+    if (phase !== "countdown") return;
+
+    function tick() {
+      const left = TARGET_MS - Date.now();
+      setTimeLeft(msToHMS(left));
+
+      if (left <= VIDEO_LEAD_MS) {
+        setPhase("video");
+      }
+    }
+
+    tick(); // immediate first tick
+    timerRef.current = setInterval(tick, 500);
+    return () => clearInterval(timerRef.current);
+  }, [phase]);
+
+  // Watch midnight arrival during video phase
+  useEffect(() => {
+    if (phase !== "video") return;
+
+    // Check if midnight already passed when we entered video phase
+    if (Date.now() >= TARGET_MS) {
+      midnightReachedRef.current = true;
+    }
+
+    function tick() {
+      if (Date.now() >= TARGET_MS) {
+        midnightReachedRef.current = true;
+        clearInterval(timerRef.current);
+        // If video already ended, go to birthday now
+        const vid = videoRef.current;
+        if (vid && (vid.ended || vid.paused)) {
+          enterBirthday();
+        }
+      }
+    }
+
+    timerRef.current = setInterval(tick, 250);
+    return () => clearInterval(timerRef.current);
+  }, [phase, enterBirthday]);
+
+  // Attach video event handlers when video phase is active
+  useEffect(() => {
+    if (phase !== "video") return;
+    const vid = videoRef.current;
+    if (!vid) return;
+
+    function handleEnded() {
+      if (midnightReachedRef.current) {
+        enterBirthday();
+      } else {
+        // Video finished early — wait for midnight, then go
+        const msUntilMidnight = Math.max(0, TARGET_MS - Date.now());
+        const t = setTimeout(enterBirthday, msUntilMidnight);
+        return () => clearTimeout(t);
+      }
+    }
+
+    function handleError() {
+      // Playback failed — fall back to countdown or birthday depending on time
+      if (Date.now() >= TARGET_MS) {
+        enterBirthday();
+      } else {
+        setPhase("countdown");
+      }
+    }
+
+    vid.addEventListener("ended", handleEnded);
+    vid.addEventListener("error", handleError);
+
+    // Attempt play (may be blocked by autoplay policy; error handler covers that)
+    vid.play().catch(() => {
+      // Autoplay blocked — treat as error: fall back gracefully
+      handleError();
+    });
+
+    return () => {
+      vid.removeEventListener("ended", handleEnded);
+      vid.removeEventListener("error", handleError);
+    };
+  }, [phase, enterBirthday]);
+
+  // ── Render ────────────────────────────────────────────────────────────────
+
+  if (phase === "countdown") {
+    const [h, m, s] = timeLeft;
+    return (
+      <div className="cdov-overlay" aria-live="polite" aria-label="Countdown to Nisarga's birthday">
+        <div className="cdov-stars" aria-hidden="true">
+          {Array.from({ length: 55 }, (_, i) => (
+            <i key={i} style={{ left: `${(i * 41) % 100}%`, top: `${(i * 67) % 100}%`, animationDelay: `${(i % 7) * 0.38}s`, opacity: 0.18 + (i % 5) * 0.12 }} />
+          ))}
+        </div>
+        <div className="cdov-moon" aria-hidden="true"><Moon size={30} strokeWidth={1.1} /></div>
+        <div className="cdov-content">
+          <p className="eyebrow"><Sparkles size={13} /> SOMETHING SPECIAL IS ALMOST HERE</p>
+          <h1 className="cdov-name">Nisarga<span className="pink">.</span></h1>
+          <p className="cdov-sub">your birthday begins in</p>
+          <div className="cdov-clock" aria-label={`${h} hours, ${m} minutes, ${s} seconds`}>
+            <div className="cdov-unit">
+              <span className="cdov-digit">{String(h).padStart(2, "0")}</span>
+              <span className="cdov-label">hours</span>
+            </div>
+            <span className="cdov-sep" aria-hidden="true">:</span>
+            <div className="cdov-unit">
+              <span className="cdov-digit">{String(m).padStart(2, "0")}</span>
+              <span className="cdov-label">minutes</span>
+            </div>
+            <span className="cdov-sep" aria-hidden="true">:</span>
+            <div className="cdov-unit">
+              <span className="cdov-digit">{String(s).padStart(2, "0")}</span>
+              <span className="cdov-label">seconds</span>
+            </div>
+          </div>
+          <p className="cdov-note">November 2 · midnight IST ✦</p>
+        </div>
+        <div className="cdov-bottom">MADE WITH LOVE · JUST FOR YOU</div>
+      </div>
+    );
+  }
+
+  if (phase === "video") {
+    return (
+      <div className="cdov-video-overlay" aria-label="Playing birthday surprise video">
+        <video
+          ref={videoRef}
+          src="/midnight-countdown-video.mp4"
+          playsInline
+          preload="auto"
+          muted={false}
+          style={{ width: "100%", height: "100%", objectFit: "cover" }}
+          aria-hidden="true"
+        />
+      </div>
+    );
+  }
+
+  // phase === 'birthday' — render the full existing app, skipping the intro
+  return <App skipIntro />;
+}
 
 const memories = [
   { date: "REVA UNIVERSITY · BCA DAYS", title: "Before our story began", text: "We knew each other from our BCA days at REVA University. Back then, we weren't talking all that much. Funny how someone who was already part of your world can later become such a special part of it.", photo: "memory-01.jpg", caption: "Where our paths first crossed ✦" },
@@ -33,8 +212,8 @@ const quiz = [
   { q: "What is the next thing we should collect?", options: ["More photos", "More inside jokes", "More memories", "Yes"], answer: 3, response: "YES is the only acceptable answer. More memories, please. 🌙" }
 ];
 
-function App() {
-  const [entered, setEntered] = useState(false);
+function App({ skipIntro = false }) {
+  const [entered, setEntered] = useState(skipIntro);
   const [activeStep, setActiveStep] = useState(0);
   const [openedStars, setOpenedStars] = useState([]);
   const [receivedGifts, setReceivedGifts] = useState([]);
@@ -229,4 +408,4 @@ function App() {
   );
 }
 
-createRoot(document.getElementById("root")).render(<App />);
+createRoot(document.getElementById("root")).render(<Root />);

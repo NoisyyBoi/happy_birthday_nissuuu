@@ -4,8 +4,7 @@ import { Heart, Sparkles, Gift, Music2, Camera, Moon, Star, ArrowDown, LockKeyho
 import "./styles.css";
 
 // ─── Midnight target: November 2 2026, 00:00:00 IST (UTC+5:30) ───────────────
-// ⚠️  TEST MODE — remove before final deployment
-const TARGET_MS = Date.now() + 5_000 + 18_000; // countdown shows for 5s, then video plays
+const TARGET_MS = Date.UTC(2026, 10, 1, 18, 30, 0); // Nov 1 2026 18:30 UTC = Nov 2 00:00 IST
 const VIDEO_LEAD_MS = 18_000; // start video this many ms before midnight
 
 function Root() {
